@@ -1,0 +1,7 @@
+[package]
+name = "opsynth"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+generational-arena = "0.2"
