@@ -1,9 +1,11 @@
 use std::f32::consts::PI;
+use std::fmt::Debug;
 use std::ops::Deref;
 use std::ops::DerefMut;
 
 pub const BLOCK_SIZE: usize = 64;
 
+#[derive(Debug, Clone, Copy)]
 pub struct Block([f32; BLOCK_SIZE]);
 
 pub const SILENCE: [f32; BLOCK_SIZE] = [0f32; BLOCK_SIZE];
@@ -67,11 +69,11 @@ impl SynthContext {
     }
 }
 
-pub trait Source {
+pub trait Source: Debug {
     fn sample(&self, phase: f32) -> f32;
 }
 
-pub trait Operator {
+pub trait Operator: Debug {
     fn render(&self, context: &mut SynthContext) -> Block;
 }
 
@@ -123,6 +125,7 @@ impl Sine {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
 pub struct Silence;
 
 impl Operator for Silence {
@@ -131,6 +134,7 @@ impl Operator for Silence {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
 pub struct Const(f32);
 
 impl Operator for Const {
@@ -139,6 +143,7 @@ impl Operator for Const {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct VoltageOscillator<Cv, S> {
     frequency: f32,
     v_oct: Cv,
@@ -166,6 +171,7 @@ where
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Add<Lhs, Rhs> {
     lhs: Lhs,
     rhs: Rhs,
@@ -184,6 +190,7 @@ where
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Sub<Lhs, Rhs> {
     lhs: Lhs,
     rhs: Rhs,
@@ -202,6 +209,7 @@ where
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Mul<Lhs, Rhs> {
     lhs: Lhs,
     rhs: Rhs,
@@ -220,6 +228,7 @@ where
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Div<Lhs, Rhs> {
     lhs: Lhs,
     rhs: Rhs,
@@ -238,6 +247,42 @@ where
     }
 }
 
+#[derive(Debug)]
+pub struct Switch<const N: usize> {
+    choice: usize,
+    inputs: [BoxedOperator; N],
+}
+
+impl<const N: usize> Operator for Switch<N> {
+    fn render(&self, context: &mut SynthContext) -> Block {
+        if let Some(input) = self.inputs.get(self.choice).as_ref() {
+            input.render(context)
+        } else {
+            Silence.render(context)
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct BoxedOperator(Box<dyn Operator>);
+
+impl Deref for BoxedOperator {
+    type Target = Box<dyn Operator>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T> From<T> for BoxedOperator
+where
+    T: Sized + Operator + 'static,
+{
+    fn from(operator: T) -> Self {
+        Self(Box::new(operator))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -246,15 +291,31 @@ mod tests {
     fn test_sine() {
         let mut context = SynthContext::new(44_100);
 
-        let block = Sine::vco(MIDDLE_C).render(&mut context);
-        println!("{:?}", *block);
+        let a = Sine::vco(MIDDLE_C);
+        let block = a.render(&mut context);
+        println!("{:?}\n", block);
 
-        let block = Sine::vco(MIDDLE_C).add(Const(1.0)).render(&mut context);
-        println!("{:?}", *block);
+        let b = Sine::vco(MIDDLE_C).add(Const(1.0));
+        let block = b.render(&mut context);
+        println!("{:?}\n", block);
+
+        let c = Switch {
+            choice: 0,
+            inputs: [a.clone().into(), b.clone().into()],
+        };
+        let block = c.render(&mut context);
+        println!("{:?}\n", block);
+
+        let d = Switch {
+            choice: 1,
+            inputs: [a.clone().into(), b.clone().into()],
+        };
+        let block = d.render(&mut context);
+        println!("{:?}\n", block);
 
         context.update();
 
         let block = Sine::vco(MIDDLE_C).render(&mut context);
-        println!("{:?}", *block);
+        println!("{:?}\n", block);
     }
 }
