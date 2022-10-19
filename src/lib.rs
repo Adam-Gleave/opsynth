@@ -1,58 +1,154 @@
-use generational_arena::Arena;
-use generational_arena::Index;
+use std::f32::consts::PI;
+use std::ops::Deref;
+use std::ops::DerefMut;
 
 pub const BLOCK_SIZE: usize = 64;
 
-pub type Block = [f32; BLOCK_SIZE];
+pub struct Block([f32; BLOCK_SIZE]);
 
-pub type InputIndex = Index;
-pub type OutputIndex = Index;
+pub const SILENCE: [f32; BLOCK_SIZE] = [0f32; BLOCK_SIZE];
 
-pub const SILENCE: Block = [0f32; BLOCK_SIZE];
+impl Deref for Block {
+    type Target = [f32; BLOCK_SIZE];
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for Block {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl Block {
+    fn silence() -> Self {
+        Self(SILENCE)
+    }
+
+    fn from_sample_fn<F>(mut f: F) -> Self
+    where
+        F: FnMut(usize) -> f32,
+    {
+        let mut samples = SILENCE;
+
+        for (i, sample) in samples.iter_mut().enumerate() {
+            *sample = f(i)
+        }
+
+        Self(samples)
+    }
+}
 
 pub struct SynthContext {
-    blocks: Arena<Block>,
+    sample_rate: u32,
+    sample_count: u32,
 }
 
 impl SynthContext {
-    pub fn new() -> Self {
-        let initial_blocks = 1024;
-
+    pub fn new(sample_rate: u32) -> Self {
         Self {
-            blocks: Arena::with_capacity(initial_blocks),
+            sample_rate,
+            sample_count: 0,
         }
     }
 
-    pub fn new_block(&mut self) -> Index {
-        self.blocks.insert(SILENCE)
+    pub fn time(&self) -> f32 {
+        self.sample_count as f32 * self.sample_time()
     }
 
-    pub fn block(&self, index: Index) -> Option<&Block> {
-        self.blocks.get(index)
+    pub fn sample_time(&self) -> f32 {
+        1.0 / self.sample_rate as f32
     }
 
-    pub fn block_mut(&mut self, index: Index) -> Option<&mut Block> {
-        self.blocks.get_mut(index)
+    pub fn update(&mut self) {
+        self.sample_count += BLOCK_SIZE as u32;
     }
+}
+
+pub trait Source {
+    fn sample(&self, phase: f32) -> f32;
 }
 
 pub trait Operator {
-    fn operate(&self, context: &mut SynthContext);
+    fn operate(&self, context: &mut SynthContext) -> Block;
 }
+
+pub fn volt_octave(frequency: f32, volt_octave: f32) -> f32 {
+    frequency * 2_f32.powf(volt_octave)
+}
+
+const MIDDLE_C: f32 = 256.0;
 
 #[derive(Debug, Clone, Copy)]
-pub struct SineSource {
-    block: Index,
-    frequency: f32,
-    phase: f32,
+pub struct Sine;
+
+impl Source for Sine {
+    fn sample(&self, phase: f32) -> f32 {
+        (phase * 2.0 * PI).sin()
+    }
 }
 
-impl SineSource {
-    pub fn new(frequency: f32, context: &mut SynthContext) -> Self {
-        Self {
-            block: context.new_block(),
+impl Sine {
+    pub fn oscillator(frequency: f32) -> VoltageOscillator<Silence, Self> {
+        VoltageOscillator {
             frequency,
-            phase: 0.0,
+            v_oct: Silence,
+            inner: Sine,
         }
+    }
+}
+
+pub struct Silence;
+
+impl Operator for Silence {
+    fn operate(&self, _: &mut SynthContext) -> Block {
+        Block::silence()
+    }
+}
+
+pub struct VoltageOscillator<Cv, S> {
+    frequency: f32,
+    v_oct: Cv,
+    inner: S,
+}
+
+impl<Cv, S> Operator for VoltageOscillator<Cv, S>
+where
+    Cv: Operator,
+    S: Source,
+{
+    fn operate(&self, context: &mut SynthContext) -> Block {
+        let v_oct = self.v_oct.operate(context);
+
+        let block_t = context.time();
+        let sample_t = context.sample_time();
+
+        let mut phase = (self.frequency * block_t) % 1.0;
+
+        Block::from_sample_fn(|i| {
+            let frequency = volt_octave(self.frequency, v_oct[i]);
+            phase = (phase + frequency * sample_t) % 1.0;
+            self.inner.sample(phase)
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_sine() {
+        let mut context = SynthContext::new(44_100);
+
+        let block = Sine::oscillator(MIDDLE_C).operate(&mut context);
+        println!("{:?}", *block);
+
+        context.update();
+
+        let block = Sine::oscillator(MIDDLE_C).operate(&mut context);
+        println!("{:?}", *block);
     }
 }
