@@ -75,6 +75,29 @@ pub trait Operator {
     fn operate(&self, context: &mut SynthContext) -> Block;
 }
 
+pub trait OperatorExt
+where
+    Self: Sized,
+{
+    fn add<Rhs>(self, rhs: Rhs) -> Add<Self, Rhs> {
+        Add { lhs: self, rhs }
+    }
+
+    fn sub<Rhs>(self, rhs: Rhs) -> Sub<Self, Rhs> {
+        Sub { lhs: self, rhs }
+    }
+
+    fn mul<Rhs>(self, rhs: Rhs) -> Mul<Self, Rhs> {
+        Mul { lhs: self, rhs }
+    }
+
+    fn div<Rhs>(self, rhs: Rhs) -> Div<Self, Rhs> {
+        Div { lhs: self, rhs }
+    }
+}
+
+impl<T> OperatorExt for T where T: Operator {}
+
 pub fn volt_octave(frequency: f32, volt_octave: f32) -> f32 {
     frequency * 2_f32.powf(volt_octave)
 }
@@ -108,6 +131,14 @@ impl Operator for Silence {
     }
 }
 
+pub struct Const(f32);
+
+impl Operator for Const {
+    fn operate(&self, _: &mut SynthContext) -> Block {
+        Block([self.0; BLOCK_SIZE])
+    }
+}
+
 pub struct VoltageOscillator<Cv, S> {
     frequency: f32,
     v_oct: Cv,
@@ -135,20 +166,74 @@ where
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+pub struct Add<Lhs, Rhs> {
+    lhs: Lhs,
+    rhs: Rhs,
+}
 
-    #[test]
-    fn test_sine() {
-        let mut context = SynthContext::new(44_100);
+impl<Lhs, Rhs> Operator for Add<Lhs, Rhs>
+where
+    Lhs: Operator,
+    Rhs: Operator,
+{
+    fn operate(&self, context: &mut SynthContext) -> Block {
+        let lhs = self.lhs.operate(context);
+        let rhs = self.rhs.operate(context);
 
-        let block = Sine::oscillator(MIDDLE_C).operate(&mut context);
-        println!("{:?}", *block);
+        Block::from_sample_fn(|i| lhs[i] + rhs[i])
+    }
+}
 
-        context.update();
+pub struct Sub<Lhs, Rhs> {
+    lhs: Lhs,
+    rhs: Rhs,
+}
 
-        let block = Sine::oscillator(MIDDLE_C).operate(&mut context);
-        println!("{:?}", *block);
+impl<Lhs, Rhs> Operator for Sub<Lhs, Rhs>
+where
+    Lhs: Operator,
+    Rhs: Operator,
+{
+    fn operate(&self, context: &mut SynthContext) -> Block {
+        let lhs = self.lhs.operate(context);
+        let rhs = self.rhs.operate(context);
+
+        Block::from_sample_fn(|i| lhs[i] - rhs[i])
+    }
+}
+
+pub struct Mul<Lhs, Rhs> {
+    lhs: Lhs,
+    rhs: Rhs,
+}
+
+impl<Lhs, Rhs> Operator for Mul<Lhs, Rhs>
+where
+    Lhs: Operator,
+    Rhs: Operator,
+{
+    fn operate(&self, context: &mut SynthContext) -> Block {
+        let lhs = self.lhs.operate(context);
+        let rhs = self.rhs.operate(context);
+
+        Block::from_sample_fn(|i| lhs[i] * rhs[i])
+    }
+}
+
+pub struct Div<Lhs, Rhs> {
+    lhs: Lhs,
+    rhs: Rhs,
+}
+
+impl<Lhs, Rhs> Operator for Div<Lhs, Rhs>
+where
+    Lhs: Operator,
+    Rhs: Operator,
+{
+    fn operate(&self, context: &mut SynthContext) -> Block {
+        let lhs = self.lhs.operate(context);
+        let rhs = self.rhs.operate(context);
+
+        Block::from_sample_fn(|i| lhs[i] / rhs[i])
     }
 }
