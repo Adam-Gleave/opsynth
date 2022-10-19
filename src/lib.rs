@@ -72,7 +72,7 @@ pub trait Source {
 }
 
 pub trait Operator {
-    fn operate(&self, context: &mut SynthContext) -> Block;
+    fn render(&self, context: &mut SynthContext) -> Block;
 }
 
 pub trait OperatorExt
@@ -114,7 +114,7 @@ impl Source for Sine {
 }
 
 impl Sine {
-    pub fn oscillator(frequency: f32) -> VoltageOscillator<Silence, Self> {
+    pub fn vco(frequency: f32) -> VoltageOscillator<Silence, Self> {
         VoltageOscillator {
             frequency,
             v_oct: Silence,
@@ -126,7 +126,7 @@ impl Sine {
 pub struct Silence;
 
 impl Operator for Silence {
-    fn operate(&self, _: &mut SynthContext) -> Block {
+    fn render(&self, _: &mut SynthContext) -> Block {
         Block::silence()
     }
 }
@@ -134,7 +134,7 @@ impl Operator for Silence {
 pub struct Const(f32);
 
 impl Operator for Const {
-    fn operate(&self, _: &mut SynthContext) -> Block {
+    fn render(&self, _: &mut SynthContext) -> Block {
         Block([self.0; BLOCK_SIZE])
     }
 }
@@ -150,8 +150,8 @@ where
     Cv: Operator,
     S: Source,
 {
-    fn operate(&self, context: &mut SynthContext) -> Block {
-        let v_oct = self.v_oct.operate(context);
+    fn render(&self, context: &mut SynthContext) -> Block {
+        let v_oct = self.v_oct.render(context);
 
         let block_t = context.time();
         let sample_t = context.sample_time();
@@ -176,9 +176,9 @@ where
     Lhs: Operator,
     Rhs: Operator,
 {
-    fn operate(&self, context: &mut SynthContext) -> Block {
-        let lhs = self.lhs.operate(context);
-        let rhs = self.rhs.operate(context);
+    fn render(&self, context: &mut SynthContext) -> Block {
+        let lhs = self.lhs.render(context);
+        let rhs = self.rhs.render(context);
 
         Block::from_sample_fn(|i| lhs[i] + rhs[i])
     }
@@ -194,9 +194,9 @@ where
     Lhs: Operator,
     Rhs: Operator,
 {
-    fn operate(&self, context: &mut SynthContext) -> Block {
-        let lhs = self.lhs.operate(context);
-        let rhs = self.rhs.operate(context);
+    fn render(&self, context: &mut SynthContext) -> Block {
+        let lhs = self.lhs.render(context);
+        let rhs = self.rhs.render(context);
 
         Block::from_sample_fn(|i| lhs[i] - rhs[i])
     }
@@ -212,9 +212,9 @@ where
     Lhs: Operator,
     Rhs: Operator,
 {
-    fn operate(&self, context: &mut SynthContext) -> Block {
-        let lhs = self.lhs.operate(context);
-        let rhs = self.rhs.operate(context);
+    fn render(&self, context: &mut SynthContext) -> Block {
+        let lhs = self.lhs.render(context);
+        let rhs = self.rhs.render(context);
 
         Block::from_sample_fn(|i| lhs[i] * rhs[i])
     }
@@ -230,10 +230,31 @@ where
     Lhs: Operator,
     Rhs: Operator,
 {
-    fn operate(&self, context: &mut SynthContext) -> Block {
-        let lhs = self.lhs.operate(context);
-        let rhs = self.rhs.operate(context);
+    fn render(&self, context: &mut SynthContext) -> Block {
+        let lhs = self.lhs.render(context);
+        let rhs = self.rhs.render(context);
 
         Block::from_sample_fn(|i| lhs[i] / rhs[i])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_sine() {
+        let mut context = SynthContext::new(44_100);
+
+        let block = Sine::vco(MIDDLE_C).render(&mut context);
+        println!("{:?}", *block);
+
+        let block = Sine::vco(MIDDLE_C).add(Const(1.0)).render(&mut context);
+        println!("{:?}", *block);
+
+        context.update();
+
+        let block = Sine::vco(MIDDLE_C).render(&mut context);
+        println!("{:?}", *block);
     }
 }
