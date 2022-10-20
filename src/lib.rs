@@ -131,6 +131,16 @@ where
     {
         Clip { input: self, level }
     }
+
+    fn trigger(self) -> Trigger<Self>
+    where
+        Self: Operator,
+    {
+        Trigger {
+            input: self,
+            previous_sample: TriggerState::Low,
+        }
+    }
 }
 
 impl<T> OperatorExt for T where T: Operator {}
@@ -452,43 +462,86 @@ where
     }
 }
 
-pub struct Switch<const N: usize> {
-    pub choice: usize,
-    pub inputs: [BoxedOperator; N],
+pub struct Clock {
+    interval_sec: f32,
+    completed: u32,
 }
 
-impl<const N: usize> Operator for Switch<N> {
-    fn render(&mut self, context: &mut SynthContext) -> Block {
-        if let Some(input) = self.inputs.get_mut(self.choice).as_deref_mut() {
-            input.render(context)
-        } else {
-            Silence.render(context)
+impl Clock {
+    pub fn bpm(bpm: f32) -> Self {
+        Self {
+            interval_sec: 60.0 / bpm,
+            completed: 0,
         }
     }
 }
 
-pub struct BoxedOperator(Box<dyn Operator>);
+impl Operator for Clock {
+    fn render(&mut self, context: &mut SynthContext) -> Block {
+        let interval = (self.interval_sec * context.sample_rate as f32).ceil() as u32;
 
-impl Deref for BoxedOperator {
-    type Target = Box<dyn Operator>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
+        Block::from_sample_fn(|_| {
+            if self.completed == interval {
+                self.completed = 0;
+                1.0
+            } else {
+                self.completed += 1;
+                0.0
+            }
+        })
     }
 }
 
-impl DerefMut for BoxedOperator {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TriggerState {
+    Low,
+    High,
+}
+
+impl From<f32> for TriggerState {
+    fn from(sample: f32) -> Self {
+        if sample < 1.0 {
+            Self::Low
+        } else {
+            Self::High
+        }
     }
 }
 
-impl<T> From<T> for BoxedOperator
+impl Into<f32> for TriggerState {
+    fn into(self) -> f32 {
+        match self {
+            Self::Low => 0.0,
+            Self::High => 1.0,
+        }
+    }
+}
+
+pub struct Trigger<I> {
+    input: I,
+    previous_sample: TriggerState,
+}
+
+impl<I> Operator for Trigger<I>
 where
-    T: Sized + Operator + 'static,
+    I: Operator,
 {
-    fn from(operator: T) -> Self {
-        Self(Box::new(operator))
+    fn render(&mut self, context: &mut SynthContext) -> Block {
+        let input = self.input.render(context);
+
+        Block::from_sample_fn(|i| {
+            let input = input[i].into();
+
+            let state = if self.previous_sample == TriggerState::Low && input == TriggerState::High
+            {
+                TriggerState::High
+            } else {
+                TriggerState::Low
+            };
+
+            self.previous_sample = input;
+            state.into()
+        })
     }
 }
 
