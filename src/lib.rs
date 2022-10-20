@@ -247,6 +247,12 @@ impl Operator for Const {
     }
 }
 
+impl Operator for f32 {
+    fn render(&mut self, _: &mut SynthContext) -> Block {
+        Block([*self; BLOCK_SIZE])
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct VoltageOscillator<Cv, S> {
     frequency: f32,
