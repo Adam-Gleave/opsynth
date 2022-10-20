@@ -87,7 +87,7 @@ impl SynthContext {
     }
 }
 
-pub trait PhasedOscillator {
+pub trait PhaseSampler {
     fn sample(&mut self, phase: f32) -> f32;
 }
 
@@ -142,7 +142,7 @@ pub fn volt_octave(frequency: f32, volt_octave: f32) -> f32 {
 #[derive(Debug, Clone, Copy)]
 pub struct Sine;
 
-impl PhasedOscillator for Sine {
+impl PhaseSampler for Sine {
     fn sample(&mut self, phase: f32) -> f32 {
         (phase * 2.0 * PI).sin()
     }
@@ -151,10 +151,12 @@ impl PhasedOscillator for Sine {
 impl Sine {
     pub fn oscillator(frequency: f32) -> VoltageOscillator<Silence, Self> {
         VoltageOscillator {
-            frequency,
-            phase: 0.0,
             v_oct: Silence,
-            inner: Sine,
+            inner: Oscillator {
+                frequency,
+                phase: 0.0,
+                inner: Sine,
+            },
         }
     }
 }
@@ -162,7 +164,7 @@ impl Sine {
 #[derive(Debug, Clone, Copy)]
 pub struct Saw;
 
-impl PhasedOscillator for Saw {
+impl PhaseSampler for Saw {
     fn sample(&mut self, phase: f32) -> f32 {
         (phase * 2.0) - 1.0
     }
@@ -171,10 +173,12 @@ impl PhasedOscillator for Saw {
 impl Saw {
     pub fn oscillator(frequency: f32) -> VoltageOscillator<Silence, Self> {
         VoltageOscillator {
-            frequency,
-            phase: 0.0,
             v_oct: Silence,
-            inner: Saw,
+            inner: Oscillator {
+                frequency,
+                phase: 0.0,
+                inner: Saw,
+            },
         }
     }
 }
@@ -182,7 +186,7 @@ impl Saw {
 #[derive(Debug, Clone, Copy)]
 pub struct Triangle;
 
-impl PhasedOscillator for Triangle {
+impl PhaseSampler for Triangle {
     fn sample(&mut self, phase: f32) -> f32 {
         if phase < 0.25 {
             phase * 4.0
@@ -197,10 +201,12 @@ impl PhasedOscillator for Triangle {
 impl Triangle {
     pub fn oscillator(frequency: f32) -> VoltageOscillator<Silence, Self> {
         VoltageOscillator {
-            frequency,
-            phase: 0.0,
             v_oct: Silence,
-            inner: Triangle,
+            inner: Oscillator {
+                frequency,
+                phase: 0.0,
+                inner: Triangle,
+            },
         }
     }
 }
@@ -208,7 +214,7 @@ impl Triangle {
 #[derive(Debug, Clone, Copy)]
 pub struct Square;
 
-impl PhasedOscillator for Square {
+impl PhaseSampler for Square {
     fn sample(&mut self, phase: f32) -> f32 {
         if phase < 0.5 {
             1.0
@@ -221,10 +227,12 @@ impl PhasedOscillator for Square {
 impl Square {
     pub fn oscillator(frequency: f32) -> VoltageOscillator<Silence, Self> {
         VoltageOscillator {
-            frequency,
-            phase: 0.0,
             v_oct: Silence,
-            inner: Square,
+            inner: Oscillator {
+                frequency,
+                phase: 0.0,
+                inner: Square,
+            },
         }
     }
 }
@@ -254,44 +262,85 @@ impl Operator for f32 {
 }
 
 #[derive(Debug, Clone)]
-pub struct VoltageOscillator<Cv, S> {
+pub struct Oscillator<S> {
     frequency: f32,
     phase: f32,
-    v_oct: Cv,
     inner: S,
+}
+
+impl<S> Oscillator<S>
+where
+    S: PhaseSampler,
+{
+    pub fn shift_phase(self, offset: f32) -> Self {
+        Self {
+            frequency: self.frequency,
+            phase: self.phase + offset,
+            inner: self.inner,
+        }
+    }
+}
+
+impl<S> PhaseSampler for Oscillator<S>
+where
+    S: PhaseSampler,
+{
+    fn sample(&mut self, phase: f32) -> f32 {
+        self.inner.sample(phase)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct VoltageOscillator<Cv, S> {
+    v_oct: Cv,
+    inner: Oscillator<S>,
 }
 
 impl<Cv, S> VoltageOscillator<Cv, S>
 where
     Cv: Operator,
-    S: PhasedOscillator,
+    S: PhaseSampler,
 {
     pub fn v_oct<I>(self, input: I) -> VoltageOscillator<I, S>
     where
         I: Operator,
     {
         VoltageOscillator {
-            frequency: self.frequency,
-            phase: self.phase,
             v_oct: input,
             inner: self.inner,
         }
     }
 }
 
+impl<Cv, S> PhaseSampler for VoltageOscillator<Cv, S>
+where
+    Cv: Operator,
+    S: PhaseSampler,
+{
+    fn sample(&mut self, phase: f32) -> f32 {
+        self.inner.sample(phase)
+    }
+}
+
 impl<Cv, S> Operator for VoltageOscillator<Cv, S>
 where
     Cv: Operator,
-    S: PhasedOscillator,
+    S: PhaseSampler,
 {
     fn render(&mut self, context: &mut SynthContext) -> Block {
         let v_oct = self.v_oct.render(context);
         let sample_t = context.sample_time();
 
+        let frequency = self.inner.frequency;
+
         Block::from_sample_fn(|i| {
-            let frequency = volt_octave(self.frequency, v_oct[i]);
-            self.phase = (self.phase + frequency * sample_t) % 1.0;
-            self.inner.sample(self.phase)
+            let frequency = volt_octave(frequency, v_oct[i]);
+
+            let phase = self.inner.phase;
+            let phase = (phase + frequency * sample_t) % 1.0;
+            self.inner.phase = phase;
+
+            self.sample(phase)
         })
     }
 }
