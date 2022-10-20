@@ -124,6 +124,13 @@ where
             rhs: rhs.mul(level),
         }
     }
+
+    fn clip<Cv>(self, level: Cv) -> Clip<Self, Cv>
+    where
+        Cv: Operator,
+    {
+        Clip { input: self, level }
+    }
 }
 
 impl<T> OperatorExt for T where T: Operator {}
@@ -360,6 +367,35 @@ where
 }
 
 pub type Mix<Lhs, Rhs, Cv> = Add<Lhs, Mul<Rhs, Cv>>;
+
+pub struct Clip<I, Cv> {
+    input: I,
+    level: Cv,
+}
+
+impl<I, Cv> Operator for Clip<I, Cv>
+where
+    I: Operator,
+    Cv: Operator,
+{
+    fn render(&mut self, context: &mut SynthContext) -> Block {
+        let input = self.input.render(context);
+        let level = self.level.render(context);
+
+        Block::from_sample_fn(|i| {
+            let input = input[i];
+            let level = level[i].abs();
+
+            if input.abs() <= level {
+                input
+            } else if input.is_sign_negative() {
+                0.0 - level
+            } else {
+                level
+            }
+        })
+    }
+}
 
 pub struct Switch<const N: usize> {
     pub choice: usize,

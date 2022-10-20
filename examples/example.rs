@@ -20,7 +20,7 @@ fn main() {
         .mul(Sine::oscillator(0.2));
     let stable_tone = Triangle::oscillator(A4);
     let level = Sine::oscillator(1.0).mul(Const(0.5)).add(Const(1.0));
-    let synth = varying_tone.mix(stable_tone, level);
+    let synth = varying_tone.mix(stable_tone, level).clip(Const(0.5));
 
     let cpal_out = CpalMono::new(&device, &config);
     let mut sink = Sink::cpal_mono(synth, cpal_out);
