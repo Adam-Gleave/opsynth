@@ -24,6 +24,15 @@ impl DerefMut for Block {
     }
 }
 
+impl IntoIterator for Block {
+    type Item = f32;
+    type IntoIter = std::array::IntoIter<Self::Item, BLOCK_SIZE>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
 impl Block {
     fn silence() -> Self {
         Self(SILENCE)
@@ -64,17 +73,26 @@ impl SynthContext {
         1.0 / self.sample_rate as f32
     }
 
-    pub fn update(&mut self) {
+    pub fn render_to_sink<I, O>(&mut self, sink: &mut Sink<I, O>)
+    where
+        I: Operator,
+        O: AudioOut,
+    {
+        sink.render(self);
+        self.update();
+    }
+
+    fn update(&mut self) {
         self.sample_count += BLOCK_SIZE as u32;
     }
 }
 
-pub trait Source: Debug {
-    fn sample(&self, phase: f32) -> f32;
+pub trait PhasedOscillator {
+    fn sample(&mut self, phase: f32) -> f32;
 }
 
-pub trait Operator: Debug {
-    fn render(&self, context: &mut SynthContext) -> Block;
+pub trait Operator {
+    fn render(&mut self, context: &mut SynthContext) -> Block;
 }
 
 pub trait OperatorExt
@@ -96,6 +114,16 @@ where
     fn div<Rhs>(self, rhs: Rhs) -> Div<Self, Rhs> {
         Div { lhs: self, rhs }
     }
+
+    fn mix<Rhs, Cv>(self, rhs: Rhs, level: Cv) -> Mix<Self, Rhs, Cv>
+    where
+        Rhs: Operator,
+    {
+        Mix {
+            lhs: self,
+            rhs: rhs.mul(level),
+        }
+    }
 }
 
 impl<T> OperatorExt for T where T: Operator {}
@@ -104,23 +132,92 @@ pub fn volt_octave(frequency: f32, volt_octave: f32) -> f32 {
     frequency * 2_f32.powf(volt_octave)
 }
 
-const MIDDLE_C: f32 = 256.0;
-
 #[derive(Debug, Clone, Copy)]
 pub struct Sine;
 
-impl Source for Sine {
-    fn sample(&self, phase: f32) -> f32 {
+impl PhasedOscillator for Sine {
+    fn sample(&mut self, phase: f32) -> f32 {
         (phase * 2.0 * PI).sin()
     }
 }
 
 impl Sine {
-    pub fn vco(frequency: f32) -> VoltageOscillator<Silence, Self> {
+    pub fn oscillator(frequency: f32) -> VoltageOscillator<Silence, Self> {
         VoltageOscillator {
             frequency,
+            phase: 0.0,
             v_oct: Silence,
             inner: Sine,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct Saw;
+
+impl PhasedOscillator for Saw {
+    fn sample(&mut self, phase: f32) -> f32 {
+        (phase * 2.0) - 1.0
+    }
+}
+
+impl Saw {
+    pub fn oscillator(frequency: f32) -> VoltageOscillator<Silence, Self> {
+        VoltageOscillator {
+            frequency,
+            phase: 0.0,
+            v_oct: Silence,
+            inner: Saw,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct Triangle;
+
+impl PhasedOscillator for Triangle {
+    fn sample(&mut self, phase: f32) -> f32 {
+        if phase < 0.25 {
+            phase * 4.0
+        } else if phase < 0.75 {
+            2.0 - (phase * 4.0)
+        } else {
+            phase * 4.0 - 4.0
+        }
+    }
+}
+
+impl Triangle {
+    pub fn oscillator(frequency: f32) -> VoltageOscillator<Silence, Self> {
+        VoltageOscillator {
+            frequency,
+            phase: 0.0,
+            v_oct: Silence,
+            inner: Triangle,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct Square;
+
+impl PhasedOscillator for Square {
+    fn sample(&mut self, phase: f32) -> f32 {
+        if phase < 0.5 {
+            1.0
+        } else {
+            -1.0
+        }
+    }
+}
+
+impl Square {
+    pub fn oscillator(frequency: f32) -> VoltageOscillator<Silence, Self> {
+        VoltageOscillator {
+            frequency,
+            phase: 0.0,
+            v_oct: Silence,
+            inner: Square,
         }
     }
 }
@@ -129,16 +226,16 @@ impl Sine {
 pub struct Silence;
 
 impl Operator for Silence {
-    fn render(&self, _: &mut SynthContext) -> Block {
+    fn render(&mut self, _: &mut SynthContext) -> Block {
         Block::silence()
     }
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct Const(f32);
+pub struct Const(pub f32);
 
 impl Operator for Const {
-    fn render(&self, _: &mut SynthContext) -> Block {
+    fn render(&mut self, _: &mut SynthContext) -> Block {
         Block([self.0; BLOCK_SIZE])
     }
 }
@@ -146,27 +243,42 @@ impl Operator for Const {
 #[derive(Debug, Clone)]
 pub struct VoltageOscillator<Cv, S> {
     frequency: f32,
+    phase: f32,
     v_oct: Cv,
     inner: S,
+}
+
+impl<Cv, S> VoltageOscillator<Cv, S>
+where
+    Cv: Operator,
+    S: PhasedOscillator,
+{
+    pub fn v_oct<I>(self, input: I) -> VoltageOscillator<I, S>
+    where
+        I: Operator,
+    {
+        VoltageOscillator {
+            frequency: self.frequency,
+            phase: self.phase,
+            v_oct: input,
+            inner: self.inner,
+        }
+    }
 }
 
 impl<Cv, S> Operator for VoltageOscillator<Cv, S>
 where
     Cv: Operator,
-    S: Source,
+    S: PhasedOscillator,
 {
-    fn render(&self, context: &mut SynthContext) -> Block {
+    fn render(&mut self, context: &mut SynthContext) -> Block {
         let v_oct = self.v_oct.render(context);
-
-        let block_t = context.time();
         let sample_t = context.sample_time();
-
-        let mut phase = (self.frequency * block_t) % 1.0;
 
         Block::from_sample_fn(|i| {
             let frequency = volt_octave(self.frequency, v_oct[i]);
-            phase = (phase + frequency * sample_t) % 1.0;
-            self.inner.sample(phase)
+            self.phase = (self.phase + frequency * sample_t) % 1.0;
+            self.inner.sample(self.phase)
         })
     }
 }
@@ -182,7 +294,7 @@ where
     Lhs: Operator,
     Rhs: Operator,
 {
-    fn render(&self, context: &mut SynthContext) -> Block {
+    fn render(&mut self, context: &mut SynthContext) -> Block {
         let lhs = self.lhs.render(context);
         let rhs = self.rhs.render(context);
 
@@ -201,7 +313,7 @@ where
     Lhs: Operator,
     Rhs: Operator,
 {
-    fn render(&self, context: &mut SynthContext) -> Block {
+    fn render(&mut self, context: &mut SynthContext) -> Block {
         let lhs = self.lhs.render(context);
         let rhs = self.rhs.render(context);
 
@@ -220,7 +332,7 @@ where
     Lhs: Operator,
     Rhs: Operator,
 {
-    fn render(&self, context: &mut SynthContext) -> Block {
+    fn render(&mut self, context: &mut SynthContext) -> Block {
         let lhs = self.lhs.render(context);
         let rhs = self.rhs.render(context);
 
@@ -239,7 +351,7 @@ where
     Lhs: Operator,
     Rhs: Operator,
 {
-    fn render(&self, context: &mut SynthContext) -> Block {
+    fn render(&mut self, context: &mut SynthContext) -> Block {
         let lhs = self.lhs.render(context);
         let rhs = self.rhs.render(context);
 
@@ -247,15 +359,16 @@ where
     }
 }
 
-#[derive(Debug)]
+pub type Mix<Lhs, Rhs, Cv> = Add<Lhs, Mul<Rhs, Cv>>;
+
 pub struct Switch<const N: usize> {
-    choice: usize,
-    inputs: [BoxedOperator; N],
+    pub choice: usize,
+    pub inputs: [BoxedOperator; N],
 }
 
 impl<const N: usize> Operator for Switch<N> {
-    fn render(&self, context: &mut SynthContext) -> Block {
-        if let Some(input) = self.inputs.get(self.choice).as_ref() {
+    fn render(&mut self, context: &mut SynthContext) -> Block {
+        if let Some(input) = self.inputs.get_mut(self.choice).as_deref_mut() {
             input.render(context)
         } else {
             Silence.render(context)
@@ -263,7 +376,6 @@ impl<const N: usize> Operator for Switch<N> {
     }
 }
 
-#[derive(Debug)]
 pub struct BoxedOperator(Box<dyn Operator>);
 
 impl Deref for BoxedOperator {
@@ -271,6 +383,12 @@ impl Deref for BoxedOperator {
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl DerefMut for BoxedOperator {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }
 
@@ -283,39 +401,119 @@ where
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+pub trait AudioOut {
+    fn write(&mut self, input: Block);
+}
 
-    #[test]
-    fn test_sine() {
-        let mut context = SynthContext::new(44_100);
+use std::fmt::Display;
 
-        let a = Sine::vco(MIDDLE_C);
-        let block = a.render(&mut context);
-        println!("{:?}\n", block);
+use cpal::traits::DeviceTrait;
+use cpal::traits::StreamTrait;
+use cpal::Sample;
+use cpal::SampleFormat;
+use rtrb::Consumer;
+use rtrb::Producer;
+use rtrb::RingBuffer;
 
-        let b = Sine::vco(MIDDLE_C).add(Const(1.0));
-        let block = b.render(&mut context);
-        println!("{:?}\n", block);
+const RING_BUFFER_CAPACITY: usize = 4096;
 
-        let c = Switch {
-            choice: 0,
-            inputs: [a.clone().into(), b.clone().into()],
-        };
-        let block = c.render(&mut context);
-        println!("{:?}\n", block);
+pub struct Sink<I, O> {
+    input: I,
+    inner: O,
+}
 
-        let d = Switch {
-            choice: 1,
-            inputs: [a.clone().into(), b.clone().into()],
-        };
-        let block = d.render(&mut context);
-        println!("{:?}\n", block);
-
-        context.update();
-
-        let block = Sine::vco(MIDDLE_C).render(&mut context);
-        println!("{:?}\n", block);
+impl<I> Sink<I, CpalMono>
+where
+    I: Operator,
+{
+    pub fn cpal_mono(input: I, output: CpalMono) -> Self {
+        Self {
+            input,
+            inner: output,
+        }
     }
+}
+
+impl<I, O> Operator for Sink<I, O>
+where
+    I: Operator,
+    O: AudioOut,
+{
+    fn render(&mut self, context: &mut SynthContext) -> Block {
+        self.inner.write(self.input.render(context));
+        Block::silence()
+    }
+}
+
+pub struct CpalMono {
+    buffer: Producer<f32>,
+    _stream: cpal::Stream,
+}
+
+impl CpalMono {
+    pub fn new(device: &cpal::Device, config: &cpal::SupportedStreamConfig) -> Self {
+        let channels = config.channels() as usize;
+        let sample_format = config.sample_format();
+        let config = config.clone().into();
+
+        let (producer, mut consumer) = RingBuffer::<f32>::new(RING_BUFFER_CAPACITY);
+
+        let stream = match sample_format {
+            SampleFormat::F32 => device.build_output_stream(
+                &config,
+                move |data: &mut [f32], info: &cpal::OutputCallbackInfo| {
+                    data_callback(&mut consumer, data, info, channels);
+                },
+                error_callback,
+            ),
+            SampleFormat::I16 => device.build_output_stream(
+                &config,
+                move |data: &mut [i16], info: &cpal::OutputCallbackInfo| {
+                    data_callback(&mut consumer, data, info, channels);
+                },
+                error_callback,
+            ),
+            SampleFormat::U16 => device.build_output_stream(
+                &config,
+                move |data: &mut [u16], info: &cpal::OutputCallbackInfo| {
+                    data_callback(&mut consumer, data, info, channels);
+                },
+                error_callback,
+            ),
+        }
+        .expect("error building output stream");
+
+        stream.play().unwrap();
+
+        Self {
+            buffer: producer,
+            _stream: stream,
+        }
+    }
+}
+
+impl AudioOut for CpalMono {
+    fn write(&mut self, input: Block) {
+        for sample in input {
+            while self.buffer.is_full() {}
+            self.buffer.push(sample).ok();
+        }
+    }
+}
+
+fn data_callback<T: Sample + Display>(
+    input: &mut Consumer<f32>,
+    data: &mut [T],
+    _: &cpal::OutputCallbackInfo,
+    channels: usize,
+) {
+    for frame in data.chunks_mut(channels) {
+        let sample = T::from(&input.pop().unwrap_or_default());
+        frame.fill(sample);
+    }
+}
+
+fn error_callback(err: cpal::StreamError) {
+    // TODO
+    eprintln!("error in output stream: {}", err);
 }
