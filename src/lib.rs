@@ -99,6 +99,13 @@ pub trait OperatorExt
 where
     Self: Sized,
 {
+    fn boxed(self) -> Box<dyn Operator>
+    where
+        Self: Operator + 'static,
+    {
+        Box::new(self)
+    }
+
     fn add<Rhs>(self, rhs: Rhs) -> Add<Self, Rhs> {
         Add { lhs: self, rhs }
     }
@@ -140,6 +147,16 @@ where
             input: self,
             previous_sample: TriggerState::Low,
         }
+    }
+
+    fn sequential_switch(
+        self,
+        signals: impl IntoIterator<Item = Box<dyn Operator>>,
+    ) -> SequentialSwitch<Self>
+    where
+        Self: Operator,
+    {
+        SequentialSwitch::new(self.trigger(), signals)
     }
 }
 
@@ -541,6 +558,54 @@ where
 
             self.previous_sample = input;
             state.into()
+        })
+    }
+}
+
+pub struct SequentialSwitch<I> {
+    trigger: Trigger<I>,
+    signals: Vec<Box<dyn Operator>>,
+    index: usize,
+}
+
+impl<I> SequentialSwitch<I>
+where
+    I: Operator,
+{
+    pub fn new(trigger: Trigger<I>, signals: impl IntoIterator<Item = Box<dyn Operator>>) -> Self {
+        Self {
+            trigger,
+            signals: signals.into_iter().collect(),
+            index: 0,
+        }
+    }
+
+    fn render_current_block(&mut self, context: &mut SynthContext) -> Block {
+        self.signals[self.index].render(context)
+    }
+
+    fn next_index(&self) -> usize {
+        (self.index + 1) % self.signals.len()
+    }
+}
+
+impl<I> Operator for SequentialSwitch<I>
+where
+    I: Operator,
+{
+    fn render(&mut self, context: &mut SynthContext) -> Block {
+        let trigger = self.trigger.render(context);
+        let mut block = self.render_current_block(context);
+
+        Block::from_sample_fn(|i| {
+            let trigger: TriggerState = trigger[i].into();
+
+            if trigger == TriggerState::High {
+                self.index = self.next_index();
+                block = self.render_current_block(context);
+            }
+
+            block[i]
         })
     }
 }

@@ -13,3 +13,7 @@ cpal = "0.13"
 [[example]]
 name = "example"
 crate-type = ["bin"]
+
+[[example]]
+name = "sequencer"
+crate-type = ["bin"]
