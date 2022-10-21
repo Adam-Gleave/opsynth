@@ -428,6 +428,76 @@ where
 
 pub type Mix<Lhs, Rhs, Cv> = Add<Lhs, Mul<Rhs, Cv>>;
 
+#[derive(Debug, Clone)]
+pub struct Min<Lhs, Rhs> {
+    lhs: Lhs,
+    rhs: Rhs,
+}
+
+impl<Lhs, Rhs> Operator for Min<Lhs, Rhs>
+where
+    Lhs: Operator,
+    Rhs: Operator,
+{
+    fn render(&mut self, context: &mut SynthContext) -> Block {
+        let lhs = self.lhs.render(context);
+        let rhs = self.rhs.render(context);
+
+        Block::from_sample_fn(|i| lhs[i].min(rhs[i]))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Max<Lhs, Rhs> {
+    lhs: Lhs,
+    rhs: Rhs,
+}
+
+impl<Lhs, Rhs> Operator for Max<Lhs, Rhs>
+where
+    Lhs: Operator,
+    Rhs: Operator,
+{
+    fn render(&mut self, context: &mut SynthContext) -> Block {
+        let lhs = self.lhs.render(context);
+        let rhs = self.rhs.render(context);
+
+        Block::from_sample_fn(|i| lhs[i].max(rhs[i]))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Abs<I> {
+    input: I,
+}
+
+impl<I> Operator for Abs<I>
+where
+    I: Operator,
+{
+    fn render(&mut self, context: &mut SynthContext) -> Block {
+        let input = self.input.render(context);
+
+        Block::from_sample_fn(|i| input[i].abs())
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Invert<I> {
+    input: I,
+}
+
+impl<I> Operator for Invert<I>
+where
+    I: Operator,
+{
+    fn render(&mut self, context: &mut SynthContext) -> Block {
+        let input = self.input.render(context);
+
+        Block::from_sample_fn(|i| 0.0 - input[i])
+    }
+}
+
 pub struct Clip<I, Cv> {
     input: I,
     level: Cv,
