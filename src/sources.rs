@@ -182,6 +182,19 @@ where
     }
 }
 
+impl<Cv, S> VoltageOscillator<Cv, S>
+where
+    Cv: Operator,
+    S: PhaseSampler,
+{
+    pub fn shift_phase(self, offset: f32) -> Self {
+        Self {
+            v_oct: self.v_oct,
+            inner: self.inner.shift_phase(offset),
+        }
+    }
+}
+
 impl<Cv, S> PhaseSampler for VoltageOscillator<Cv, S>
 where
     Cv: Operator,
