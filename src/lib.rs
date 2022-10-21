@@ -119,6 +119,10 @@ where
         Mul { lhs: self, rhs }
     }
 
+    fn clip<Cv>(self, level: Cv) -> Clip<Self, Cv> {
+        Clip { input: self, level }
+    }
+
     fn mix<Rhs, Cv>(self, rhs: Rhs, level: Cv) -> Mix<Self, Rhs, Cv>
     where
         Rhs: Operator,
@@ -129,11 +133,20 @@ where
         }
     }
 
-    fn clip<Cv>(self, level: Cv) -> Clip<Self, Cv>
-    where
-        Cv: Operator,
-    {
-        Clip { input: self, level }
+    fn min<Rhs>(self, rhs: Rhs) -> Min<Self, Rhs> {
+        Min { lhs: self, rhs }
+    }
+
+    fn max<Rhs>(self, rhs: Rhs) -> Max<Self, Rhs> {
+        Max { lhs: self, rhs }
+    }
+
+    fn abs(self) -> Abs<Self> {
+        Abs { input: self }
+    }
+
+    fn invert(self) -> Invert<Self> {
+        Invert { input: self }
     }
 
     fn trigger(self) -> Trigger<Self>
