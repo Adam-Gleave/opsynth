@@ -554,10 +554,9 @@ where
                 self.completed = 0;
                 1.0
             } else if self.completed < width {
-                    1.0
-            }
-             else {
-                    0.0
+                1.0
+            } else {
+                0.0
             };
 
             self.completed += 1;
