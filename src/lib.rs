@@ -509,6 +509,63 @@ impl Operator for Clock {
     }
 }
 
+pub struct Gate<Cv> {
+    interval_sec: f32,
+    completed: u32,
+    width: Cv,
+}
+
+impl Gate<Const> {
+    pub fn bpm(bpm: f32) -> Self {
+        Self {
+            interval_sec: 60.0 / bpm,
+            completed: 0,
+            width: Const(0.5),
+        }
+    }
+}
+
+impl<Cv> Gate<Cv>
+where
+    Cv: Operator,
+{
+    pub fn width(self, input: Cv) -> Self {
+        Self {
+            interval_sec: self.interval_sec,
+            completed: self.completed,
+            width: input,
+        }
+    }
+}
+
+impl<Cv> Operator for Gate<Cv>
+where
+    Cv: Operator,
+{
+    fn render(&mut self, context: &mut SynthContext) -> Block {
+        let interval = (self.interval_sec * context.sample_rate as f32).ceil() as u32;
+        let width = self.width.render(context);
+
+        Block::from_sample_fn(|i| {
+            let width_sec = width[i] * self.interval_sec;
+            let width = (width_sec * context.sample_rate as f32).ceil() as u32;
+
+            let sample = if self.completed == interval {
+                self.completed = 0;
+                1.0
+            } else if self.completed < width {
+                    1.0
+            }
+             else {
+                    0.0
+            };
+
+            self.completed += 1;
+            sample
+        })
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TriggerState {
     Low,
