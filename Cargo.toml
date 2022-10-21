@@ -5,13 +5,14 @@ edition = "2021"
 
 [dependencies]
 cpal = "0.13"
+hound = "3.5"
 rtrb = "0.2"
 
 [dev-dependencies]
 cpal = "0.13"
 
 [[example]]
-name = "example"
+name = "drone"
 crate-type = ["bin"]
 
 [[example]]

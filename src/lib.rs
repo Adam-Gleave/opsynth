@@ -1,5 +1,6 @@
 use std::f32::consts::PI;
 use std::fmt::Debug;
+use std::fs::File;
 use std::ops::Deref;
 use std::ops::DerefMut;
 
@@ -116,10 +117,6 @@ where
 
     fn mul<Rhs>(self, rhs: Rhs) -> Mul<Self, Rhs> {
         Mul { lhs: self, rhs }
-    }
-
-    fn div<Rhs>(self, rhs: Rhs) -> Div<Self, Rhs> {
-        Div { lhs: self, rhs }
     }
 
     fn mix<Rhs, Cv>(self, rhs: Rhs, level: Cv) -> Mix<Self, Rhs, Cv>
@@ -429,25 +426,6 @@ where
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct Div<Lhs, Rhs> {
-    lhs: Lhs,
-    rhs: Rhs,
-}
-
-impl<Lhs, Rhs> Operator for Div<Lhs, Rhs>
-where
-    Lhs: Operator,
-    Rhs: Operator,
-{
-    fn render(&mut self, context: &mut SynthContext) -> Block {
-        let lhs = self.lhs.render(context);
-        let rhs = self.rhs.render(context);
-
-        Block::from_sample_fn(|i| lhs[i] / rhs[i])
-    }
-}
-
 pub type Mix<Lhs, Rhs, Cv> = Add<Lhs, Mul<Rhs, Cv>>;
 
 pub struct Clip<I, Cv> {
@@ -699,6 +677,18 @@ where
     }
 }
 
+impl<I> Sink<I, WavFile>
+where
+    I: Operator,
+{
+    pub fn wav(input: I, output: WavFile) -> Self {
+        Self {
+            input,
+            inner: output,
+        }
+    }
+}
+
 impl<I, O> Operator for Sink<I, O>
 where
     I: Operator,
@@ -781,4 +771,37 @@ fn data_callback<T: Sample + Display>(
 fn error_callback(err: cpal::StreamError) {
     // TODO
     eprintln!("error in output stream: {}", err);
+}
+
+use std::io::BufWriter;
+use std::path::Path;
+
+use hound::WavSpec;
+use hound::WavWriter;
+
+pub struct WavFile {
+    writer: WavWriter<BufWriter<File>>,
+}
+
+impl WavFile {
+    pub fn from_path<P: AsRef<Path>>(path: P, sample_rate: u32) -> hound::Result<Self> {
+        let spec = WavSpec {
+            channels: 1,
+            sample_rate,
+            bits_per_sample: 32,
+            sample_format: hound::SampleFormat::Float,
+        };
+
+        Ok(Self {
+            writer: WavWriter::create(path, spec)?,
+        })
+    }
+}
+
+impl AudioOut for WavFile {
+    fn write(&mut self, input: Block) {
+        for sample in input {
+            self.writer.write_sample(sample).ok();
+        }
+    }
 }
