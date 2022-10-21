@@ -22,10 +22,11 @@ fn main() {
         Const(7.0 * SEMITONE).boxed(),
         Const(7.0 * SEMITONE).boxed(),
     ]);
-    let sequencer = Sine::oscillator(C4).v_oct(cv);
+    let sequencer = Triangle::oscillator(C4).v_oct(cv);
+    let synth = sequencer.mul(0.8);
 
     let cpal_out = CpalMono::new(&device, &config);
-    let mut sink = Sink::cpal_mono(sequencer, cpal_out);
+    let mut sink = Sink::cpal_mono(synth, cpal_out);
 
     loop {
         context.render_to_sink(&mut sink);
