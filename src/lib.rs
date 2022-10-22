@@ -20,6 +20,7 @@ pub use sources::Silence;
 pub use sources::Sine;
 pub use sources::Square;
 pub use sources::Triangle;
+pub use sources::WhiteNoise;
 
 use branch::*;
 use detect::*;

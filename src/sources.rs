@@ -1,9 +1,11 @@
+use std::f32::consts::PI;
+
 use crate::Block;
 use crate::Operator;
 use crate::SynthContext;
 use crate::BLOCK_SIZE;
 
-use std::f32::consts::PI;
+use rand::prelude::*;
 
 pub trait PhaseSampler {
     fn sample(&mut self, phase: f32) -> f32;
@@ -225,6 +227,15 @@ where
 
             self.sample(phase)
         })
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct WhiteNoise;
+
+impl Operator for WhiteNoise {
+    fn render(&mut self, context: &mut SynthContext) -> Block {
+        Block::from_sample_fn(|_| (rand::random::<f32>() - 0.5) * 2.0)
     }
 }
 

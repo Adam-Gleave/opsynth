@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 cpal = "0.14"
 hound = "3.5"
+rand = "0.8"
 rtrb = "0.2"
 
 [dev-dependencies]
