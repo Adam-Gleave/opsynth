@@ -99,12 +99,6 @@ where
     I: Operator,
 {
     fn render(&mut self, context: &mut SynthContext) -> Block {
-        println!(
-            "Count: {}, sample_count: {}",
-            self.inner.borrow().count,
-            context.sample_count
-        );
-
         if self.inner.borrow().count == context.sample_count {
             let block = self.inner.borrow_mut().input.render(context);
             self.inner.borrow_mut().block = block;
