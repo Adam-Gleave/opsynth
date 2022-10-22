@@ -17,7 +17,7 @@ fn main() {
     let mut context = SynthContext::new(config.sample_rate().0);
 
     // Create a clock for generating triggers.
-    let clock = Clock::bpm(440.0);
+    let clock = Clock::bpm(440.0).tap();
 
     // Switch through a sequence of "control voltages" using the clock triggers.
     // These values will modulate the VCO frequecy.
