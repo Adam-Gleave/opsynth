@@ -228,6 +228,7 @@ where
     }
 }
 
+#[derive(Debug, Clone, Copy)]
 pub struct Clock {
     interval_sec: f32,
     completed: u32,

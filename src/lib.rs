@@ -1,9 +1,11 @@
 pub mod branch;
 pub mod detect;
+pub mod envelope;
 pub mod math;
 pub mod sinks;
 pub mod sources;
 
+use envelope::Ad;
 pub use sinks::AudioOut;
 pub use sinks::CpalMono;
 pub use sinks::Sink;
@@ -185,10 +187,33 @@ where
     {
         SequentialSwitch::new(self.trigger(), signals)
     }
+
+    fn ad_envelope<A, D>(self, attack: A, decay: D) -> Ad<A, D, Self>
+    where
+        A: Operator,
+        D: Operator,
+        Self: Operator,
+    {
+        envelope::ad(self, attack, decay)
+    }
 }
 
 impl<T> OperatorExt for T where T: Operator {}
 
 pub fn volt_octave(frequency: f32, volt_octave: f32) -> f32 {
     frequency * 2_f32.powf(volt_octave)
+}
+
+pub trait Lerp
+where
+    Self: Sized,
+{
+    fn lerp(self, other: f32, factor: f32) -> f32;
+}
+
+impl Lerp for f32 {
+    fn lerp(self, other: f32, factor: f32) -> f32 {
+        let factor = factor.clamp(0.0, 1.0);
+        (self * (1.0 - factor)) + (other * factor)
+    }
 }

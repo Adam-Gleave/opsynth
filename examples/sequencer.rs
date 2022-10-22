@@ -16,13 +16,31 @@ fn main() {
 
     let mut context = SynthContext::new(config.sample_rate().0);
 
-    let cv = Clock::bpm(80.0).sequential_switch([
+    let clock = Clock::bpm(400.0);
+
+    let notes = clock.clone().sequential_switch([
         Const(0.0).boxed(),
         Const(4.0 * SEMITONE).boxed(),
         Const(7.0 * SEMITONE).boxed(),
+        Const(4.0 * SEMITONE).boxed(),
+        Const(12.0 * SEMITONE).boxed(),
+        Const(4.0 * SEMITONE).boxed(),
+        Const(10.0 * SEMITONE).boxed(),
+        Const(12.0 * SEMITONE).boxed(),
+        Const(15.0 * SEMITONE).boxed(),
         Const(7.0 * SEMITONE).boxed(),
+        Const(10.0 * SEMITONE).boxed(),
+        Const(12.0 * SEMITONE).boxed(),
+        Const(17.0 * SEMITONE).boxed(),
+        Const(12.0 * SEMITONE).boxed(),
+        Const(16.0 * SEMITONE).boxed(),
+        Const(16.0 * SEMITONE).boxed(),
     ]);
-    let sequencer = Triangle::oscillator(C4).v_oct(cv);
+
+    let sequencer = Triangle::oscillator(C4)
+        .v_oct(notes)
+        .mul(clock.ad_envelope(0.005, 0.2));
+
     let synth = sequencer.mul(0.8);
 
     let cpal_out = CpalMono::new(&device, &config);
