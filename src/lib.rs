@@ -1,4 +1,5 @@
 pub mod branch;
+pub mod comparators;
 pub mod delay;
 pub mod detect;
 pub mod envelope;
