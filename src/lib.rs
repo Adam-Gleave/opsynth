@@ -8,10 +8,6 @@ pub mod scales;
 pub mod sinks;
 pub mod sources;
 
-use delay::Delay;
-use envelope::Ad;
-use scales::QuantizeMode;
-use scales::Quantizer;
 pub use sinks::AudioOut;
 pub use sinks::CpalMono;
 pub use sinks::Sink;
@@ -27,8 +23,12 @@ pub use sources::Triangle;
 pub use sources::WhiteNoise;
 
 use branch::*;
+use comparators::*;
+use delay::*;
 use detect::*;
+use envelope::*;
 use math::*;
+use scales::*;
 
 use std::fmt::Debug;
 use std::ops::Deref;
@@ -224,6 +224,30 @@ where
 
     fn quantize(self, mode: QuantizeMode) -> Quantizer<Self> {
         Quantizer { input: self, mode }
+    }
+
+    fn greater_than<Rhs>(self, rhs: Rhs) -> GreaterThan<Self, Rhs> {
+        GreaterThan { lhs: self, rhs }
+    }
+
+    fn greater_than_or_equal_to<Rhs>(self, rhs: Rhs) -> GreaterThanOrEqualTo<Self, Rhs> {
+        GreaterThanOrEqualTo { lhs: self, rhs }
+    }
+
+    fn less_than<Rhs>(self, rhs: Rhs) -> LessThan<Self, Rhs> {
+        LessThan { lhs: self, rhs }
+    }
+
+    fn less_than_or_equal_to<Rhs>(self, rhs: Rhs) -> LessThanOrEqualTo<Self, Rhs> {
+        LessThanOrEqualTo { lhs: self, rhs }
+    }
+
+    fn equal_to<Rhs>(self, rhs: Rhs) -> EqualTo<Self, Rhs> {
+        EqualTo { lhs: self, rhs }
+    }
+
+    fn not_equal_to<Rhs>(self, rhs: Rhs) -> NotEqualTo<Self, Rhs> {
+        NotEqualTo { lhs: self, rhs }
     }
 }
 
