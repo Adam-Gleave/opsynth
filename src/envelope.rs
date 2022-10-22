@@ -6,6 +6,7 @@ use crate::Operator;
 use crate::OperatorExt;
 use crate::SynthContext;
 
+#[derive(Debug, Clone)]
 pub struct Ad<A, D, T> {
     attack: A,
     decay: D,

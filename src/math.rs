@@ -131,6 +131,7 @@ where
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Clip<I, Cv> {
     pub input: I,
     pub level: Cv,

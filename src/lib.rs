@@ -1,10 +1,12 @@
 pub mod branch;
+pub mod delay;
 pub mod detect;
 pub mod envelope;
 pub mod math;
 pub mod sinks;
 pub mod sources;
 
+use delay::Delay;
 use envelope::Ad;
 pub use sinks::AudioOut;
 pub use sinks::CpalMono;
@@ -95,6 +97,10 @@ impl SynthContext {
 
     pub fn sample_time(&self) -> f32 {
         1.0 / self.sample_rate as f32
+    }
+
+    pub fn sample_rate(&self) -> u32 {
+        self.sample_rate
     }
 
     pub fn render_to_sink<I, O>(&mut self, sink: &mut Sink<I, O>)
@@ -195,6 +201,20 @@ where
         Self: Operator,
     {
         envelope::ad(self, attack, decay)
+    }
+
+    fn delay(self, time: f32, sample_rate: u32) -> Delay<Self>
+    where
+        Self: Operator,
+    {
+        Delay::delay(self, time, sample_rate)
+    }
+
+    fn tap(self) -> Tap<Self>
+    where
+        Self: Operator,
+    {
+        Tap::tap(self)
     }
 }
 

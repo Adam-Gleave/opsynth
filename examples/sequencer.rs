@@ -45,7 +45,7 @@ fn main() {
     let sequencer = Triangle::oscillator(C4).v_oct(notes);
 
     // Create an attack/decay envelope, triggered by the same clock source.
-    let envelope = clock.ad_envelope(0.001, 0.1);
+    let envelope = clock.ad_envelope(0.005, 0.1);
 
     // Modulate amplitude using the envelope.
     let voice = sequencer.mul(envelope);
@@ -57,7 +57,10 @@ fn main() {
         .add(0.6)
         .add(Sine::oscillator(0.07).mul(0.1));
 
-    let synth = voice.clip(clip_lfo).mul(0.8);
+    let clipped = voice.clip(clip_lfo).tap();
+
+    let delay = clipped.clone().delay(0.2, context.sample_rate());
+    let synth = clipped.mix(delay, 0.3).mul(0.7);
 
     let cpal_out = CpalMono::new(&device, &config);
     let mut sink = Sink::cpal_mono(synth, cpal_out);

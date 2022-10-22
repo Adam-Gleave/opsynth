@@ -27,6 +27,7 @@ impl Into<f32> for TriggerState {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Trigger<I> {
     pub input: I,
     pub previous_sample: TriggerState,
