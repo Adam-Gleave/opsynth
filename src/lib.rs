@@ -3,11 +3,14 @@ pub mod delay;
 pub mod detect;
 pub mod envelope;
 pub mod math;
+pub mod scales;
 pub mod sinks;
 pub mod sources;
 
 use delay::Delay;
 use envelope::Ad;
+use scales::QuantizeMode;
+use scales::Quantizer;
 pub use sinks::AudioOut;
 pub use sinks::CpalMono;
 pub use sinks::Sink;
@@ -216,6 +219,10 @@ where
         Self: Operator,
     {
         Tap::tap(self)
+    }
+
+    fn quantize(self, mode: QuantizeMode) -> Quantizer<Self> {
+        Quantizer { input: self, mode }
     }
 }
 

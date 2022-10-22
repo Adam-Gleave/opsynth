@@ -5,8 +5,6 @@ use crate::Operator;
 use crate::SynthContext;
 use crate::BLOCK_SIZE;
 
-use rand::prelude::*;
-
 pub trait PhaseSampler {
     fn sample(&mut self, phase: f32) -> f32;
 }
@@ -234,7 +232,7 @@ where
 pub struct WhiteNoise;
 
 impl Operator for WhiteNoise {
-    fn render(&mut self, context: &mut SynthContext) -> Block {
+    fn render(&mut self, _: &mut SynthContext) -> Block {
         Block::from_sample_fn(|_| (rand::random::<f32>() - 0.5) * 2.0)
     }
 }
