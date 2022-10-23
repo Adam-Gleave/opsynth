@@ -18,9 +18,13 @@ name = "drone"
 crate-type = ["bin"]
 
 [[example]]
-name = "sequencer"
+name = "lowpass"
 crate-type = ["bin"]
 
 [[example]]
 name = "quantizer"
+crate-type = ["bin"]
+
+[[example]]
+name = "sequencer"
 crate-type = ["bin"]
