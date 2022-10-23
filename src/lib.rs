@@ -3,11 +3,14 @@ pub mod comparators;
 pub mod delay;
 pub mod detect;
 pub mod envelope;
+pub mod filter;
 pub mod math;
 pub mod scales;
 pub mod sinks;
 pub mod sources;
 
+use filter::SinglePoleHpf;
+use filter::SinglePoleLpf;
 pub use sinks::AudioOut;
 pub use sinks::CpalMono;
 pub use sinks::Sink;
@@ -248,6 +251,20 @@ where
 
     fn not_equal_to<Rhs>(self, rhs: Rhs) -> NotEqualTo<Self, Rhs> {
         NotEqualTo { lhs: self, rhs }
+    }
+
+    fn simple_lpf(self, cutoff: f32, sample_rate: u32) -> SinglePoleLpf<Self>
+    where
+        Self: Operator,
+    {
+        SinglePoleLpf::lpf(self, cutoff, sample_rate)
+    }
+
+    fn simple_hpf(self, cutoff: f32, sample_rate: u32) -> SinglePoleHpf<Self>
+    where
+        Self: Operator,
+    {
+        SinglePoleHpf::hpf(self, cutoff, sample_rate)
     }
 }
 

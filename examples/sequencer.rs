@@ -42,7 +42,7 @@ fn main() {
 
     // Modulate a VCO, with a base frequency of C4.
     // This gives us our basic 16-step sequencer.
-    let sequencer = Triangle::oscillator(C4).v_oct(notes);
+    let sequencer = Saw::oscillator(C4).v_oct(notes);
 
     // Create an attack/decay envelope, triggered by the same clock source.
     let envelope = clock.ad_envelope(0.005, 0.1);
@@ -56,7 +56,6 @@ fn main() {
         .mul(0.3)
         .add(0.6)
         .add(Sine::oscillator(0.07).mul(0.1));
-
     let clipped = voice.clip(clip_lfo).tap();
 
     let delay = clipped.clone().delay(0.2, context.sample_rate());
