@@ -58,8 +58,8 @@ fn main() {
         .add(Sine::oscillator(0.07).mul(0.1));
     let clipped = voice.clip(clip_lfo).tap();
 
-    let delay = clipped.clone().delay(0.2, context.sample_rate());
-    let synth = clipped.mix(delay, 0.3).mul(0.7);
+    let delay = clipped.clone().delay(0.227, context.sample_rate());
+    let synth = clipped.mix(delay, 0.3).mul(0.1);
 
     let cpal_out = CpalMono::new(&device, &config);
     let mut sink = Sink::cpal_mono(synth, cpal_out);

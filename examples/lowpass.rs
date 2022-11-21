@@ -19,7 +19,10 @@ fn main() {
     let low = Sine::oscillator(LOW);
     let high = Sine::oscillator(HIGH);
 
-    let filtered = low.add(high).simple_lpf(100.0, context.sample_rate());
+    let filtered = low
+        .add(high)
+        .simple_lpf(100.0, context.sample_rate())
+        .simple_lpf(100.0, context.sample_rate());
 
     let synth = filtered.mul(0.8);
 

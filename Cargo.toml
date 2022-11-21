@@ -22,6 +22,10 @@ name = "lowpass"
 crate-type = ["bin"]
 
 [[example]]
+name = "noise"
+crate-type = ["bin"]
+
+[[example]]
 name = "quantizer"
 crate-type = ["bin"]
 
