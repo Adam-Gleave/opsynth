@@ -129,6 +129,12 @@ pub trait Operator {
     fn render(&mut self, context: &mut SynthContext) -> Block;
 }
 
+impl Operator for Box<dyn Operator> {
+    fn render(&mut self, context: &mut SynthContext) -> Block {
+        self.deref_mut().render(context)
+    }
+}
+
 pub trait OperatorExt
 where
     Self: Sized,
